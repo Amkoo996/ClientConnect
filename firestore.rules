@@ -1,0 +1,149 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: notifications
+    // Document ID: auto-generated
+    // Fields:
+    //   - userId: string (required) - The ID of the user this notification is for
+    //   - title: string (required, max 100 chars) - The title of the notification
+    //   - message: string (required, max 500 chars) - The message of the notification
+    //   - read: boolean (required) - Whether the notification has been read
+    //   - createdAt: timestamp (required) - The time the notification was created
+    //   - type: string (required, enum) - The type of notification
+    //   - linkId: string (optional, max 100 chars) - An optional ID to link to
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+    
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+    
+    function isValidOptionalString(field, minLen, maxLen) {
+      return !(field in request.resource.data) ||
+             (request.resource.data[field] is string &&
+              request.resource.data[field].size() >= minLen &&
+              request.resource.data[field].size() <= maxLen);
+    }
+
+    // Domain Validators
+    function isValidNotification() {
+      return hasRequiredFields(['userId', 'title', 'message', 'read', 'createdAt', 'type']) &&
+             hasOnlyAllowedFields(['userId', 'title', 'message', 'read', 'createdAt', 'type', 'linkId']) &&
+             request.resource.data.userId is string && request.resource.data.userId.size() > 0 && request.resource.data.userId.size() < 100 &&
+             request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 100 &&
+             request.resource.data.message is string && request.resource.data.message.size() > 0 && request.resource.data.message.size() <= 500 &&
+             request.resource.data.read is bool &&
+             request.resource.data.createdAt is timestamp &&
+             request.resource.data.type in ['NEW_TICKET', 'NEW_COMMENT'] &&
+             isValidOptionalString('linkId', 1, 100);
+    }
+
+    function isValidUser() {
+      return hasRequiredFields(['uid', 'email', 'role', 'displayName', 'createdAt', 'isActive']) &&
+             hasOnlyAllowedFields(['uid', 'email', 'role', 'displayName', 'createdAt', 'isActive', 'companyName']) &&
+             request.resource.data.uid is string && request.resource.data.uid.size() > 0 && request.resource.data.uid.size() < 100 &&
+             request.resource.data.email is string && request.resource.data.email.size() > 0 && request.resource.data.email.size() < 100 &&
+             request.resource.data.role in ['ADMIN', 'CLIENT'] &&
+             request.resource.data.displayName is string && request.resource.data.displayName.size() > 0 && request.resource.data.displayName.size() < 100 &&
+             request.resource.data.createdAt is timestamp &&
+             request.resource.data.isActive is bool &&
+             isValidOptionalString('companyName', 1, 100);
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN' ||
+          (request.auth.token.email == "reddemption19@gmail.com" && request.auth.token.email_verified == true)); // Default admin
+    }
+
+    function isValidTicket() {
+      return hasRequiredFields(['id', 'title', 'description', 'status', 'priority', 'category', 'clientId', 'clientName', 'clientEmail', 'adminId', 'createdAt', 'updatedAt']) &&
+             hasOnlyAllowedFields(['id', 'title', 'description', 'status', 'priority', 'category', 'clientId', 'clientName', 'clientEmail', 'adminId', 'createdAt', 'updatedAt', 'assigneeId', 'assigneeName', 'screenshotUrl', 'closedAt', 'customFields']) &&
+             request.resource.data.id is string &&
+             request.resource.data.title is string && request.resource.data.title.size() > 0 && request.resource.data.title.size() <= 200 &&
+             request.resource.data.description is string && request.resource.data.description.size() > 0 && request.resource.data.description.size() <= 5000 &&
+             request.resource.data.status in ['NEW', 'IN_PROGRESS', 'RESOLVED'] &&
+             request.resource.data.priority in ['LOW', 'MEDIUM', 'HIGH'] &&
+             request.resource.data.category in ['BUG', 'FEATURE', 'BILLING', 'GENERAL'] &&
+             request.resource.data.clientId is string &&
+             request.resource.data.clientName is string &&
+             request.resource.data.clientEmail is string &&
+             request.resource.data.adminId is string &&
+             request.resource.data.createdAt is timestamp &&
+             request.resource.data.updatedAt is timestamp &&
+             (!('assigneeId' in request.resource.data) || request.resource.data.assigneeId == null || request.resource.data.assigneeId is string) &&
+             (!('assigneeName' in request.resource.data) || request.resource.data.assigneeName == null || request.resource.data.assigneeName is string) &&
+             (!('screenshotUrl' in request.resource.data) || request.resource.data.screenshotUrl == null || request.resource.data.screenshotUrl is string) &&
+             (!('closedAt' in request.resource.data) || request.resource.data.closedAt == null || request.resource.data.closedAt is timestamp) &&
+             (!('customFields' in request.resource.data) || request.resource.data.customFields is map);
+    }
+
+    function isValidComment() {
+      return hasRequiredFields(['id', 'ticketId', 'userId', 'userName', 'userRole', 'text', 'createdAt', 'isEdited']) &&
+             hasOnlyAllowedFields(['id', 'ticketId', 'userId', 'userName', 'userRole', 'text', 'createdAt', 'isEdited']) &&
+             request.resource.data.id is string &&
+             request.resource.data.ticketId is string &&
+             request.resource.data.userId is string &&
+             request.resource.data.userName is string &&
+             request.resource.data.userRole in ['ADMIN', 'CLIENT'] &&
+             request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000 &&
+             request.resource.data.createdAt is timestamp &&
+             request.resource.data.isEdited is bool;
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser() && (request.resource.data.role == 'CLIENT' || isAdmin());
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUser() && (request.resource.data.role == resource.data.role || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /notifications/{notificationId} {
+      // Anyone authenticated can create a notification (e.g. client creating ticket notifies admin, admin commenting notifies client)
+      allow create: if isAuthenticated() && isValidNotification();
+      
+      // Users can only read their own notifications
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      
+      // Users can only update their own notifications (to mark as read)
+      allow update: if isAuthenticated() && 
+                    isOwner(resource.data.userId) && 
+                    isValidNotification() &&
+                    // Only allow changing the 'read' field
+                    request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']) &&
+                    request.resource.data.read == true;
+                    
+      allow delete: if false;
+    }
+    match /tickets/{ticketId} {
+      allow read: if isAuthenticated() && (isAdmin() || resource.data.clientId == request.auth.uid);
+      allow create: if isAuthenticated() && isValidTicket() && request.resource.data.clientId == request.auth.uid;
+      allow update: if isAuthenticated() && isValidTicket() && (isAdmin() || resource.data.clientId == request.auth.uid);
+      allow delete: if false;
+    }
+
+    match /comments/{commentId} {
+      allow read: if isAuthenticated(); // Could be more restrictive, but tickets are already restricted
+      allow create: if isAuthenticated() && isValidComment() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && isValidComment() && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && (isAdmin() || resource.data.userId == request.auth.uid);
+    }
+  }
+}
