@@ -5,7 +5,6 @@ import { ToastProvider } from './components/Toast';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { Navbar } from './components/Navbar';
-import { NotificationListener } from './components/NotificationListener';
 
 // Pages
 import { Login } from './pages/Login';
@@ -42,7 +41,6 @@ export default function App() {
       <AuthProvider>
         <ToastProvider>
           <BrowserRouter>
-            <NotificationListener />
             <div className="min-h-screen bg-gray-50 flex flex-col">
               <Navbar />
               <main className="flex-1">

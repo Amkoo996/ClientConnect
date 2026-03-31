@@ -10,8 +10,6 @@ export const createTicketSchema = z.object({
   title: z.string().min(3, { message: "Title must be at least 3 characters" }).max(200, { message: "Title must be at most 200 characters" }).describe("Ticket title"),
   description: z.string().min(10, { message: "Description must be at least 10 characters" }).max(5000, { message: "Description must be at most 5000 characters" }).describe("Ticket description"),
   priority: z.enum(["LOW", "MEDIUM", "HIGH"], { message: "Priority is required" }).describe("Ticket priority"),
-  category: z.enum(["BUG", "FEATURE", "BILLING", "GENERAL"], { message: "Category is required" }).describe("Ticket category"),
-  customFields: z.record(z.string(), z.string()).optional(),
 });
 
 export const createCommentSchema = z.object({

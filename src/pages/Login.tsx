@@ -2,7 +2,10 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useToast } from '../components/Toast';
+import { Input } from '../components/Input';
 import { Button } from '../components/Button';
+import { loginSchema } from '../schemas/validation';
+import { z } from 'zod';
 import { LogIn } from 'lucide-react';
 
 export const Login = () => {
@@ -10,7 +13,10 @@ export const Login = () => {
   const { showToast } = useToast();
   const navigate = useNavigate();
   
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   // Redirect if already logged in
   React.useEffect(() => {
@@ -19,13 +25,28 @@ export const Login = () => {
     }
   }, [currentUser, navigate]);
 
-  const handleGoogleLogin = async () => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
     try {
+      // Validate form
+      loginSchema.parse({ email, password });
+      setErrors({});
       setLoading(true);
-      await login();
+
+      await login(email, password);
       showToast("Successfully logged in", "success");
+      // Navigation is handled by the useEffect above once currentUser updates
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Failed to log in", "error");
+      if (error instanceof z.ZodError) {
+        const newErrors: Record<string, string> = {};
+        (error as z.ZodError<any>).issues.forEach(err => {
+          if (err.path[0]) newErrors[err.path[0].toString()] = err.message;
+        });
+        setErrors(newErrors);
+      } else {
+        showToast(error instanceof Error ? error.message : "Failed to log in", "error");
+      }
     } finally {
       setLoading(false);
     }
@@ -44,11 +65,43 @@ export const Login = () => {
           </p>
         </div>
         
-        <div className="mt-8 space-y-6">
-          <Button onClick={handleGoogleLogin} className="w-full gap-2" isLoading={loading}>
-            <LogIn className="w-4 h-4" /> Sign in with Google
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          <div className="space-y-4">
+            <Input
+              label="Email address"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              error={errors.email}
+              placeholder="you@example.com"
+            />
+            
+            <Input
+              label="Password"
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              error={errors.password}
+              placeholder="••••••••"
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="text-sm">
+              <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
+                Forgot your password?
+              </a>
+            </div>
+          </div>
+
+          <Button type="submit" className="w-full gap-2" isLoading={loading}>
+            <LogIn className="w-4 h-4" /> Sign in
           </Button>
-        </div>
+        </form>
 
         <div className="mt-6 text-center text-sm text-gray-500">
           Don't have an account?{' '}
