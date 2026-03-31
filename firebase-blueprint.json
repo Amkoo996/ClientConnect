@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "Notification": {
+      "title": "Notification",
+      "description": "A notification for a user",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "The ID of the user this notification is for"
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the notification"
+        },
+        "message": {
+          "type": "string",
+          "description": "The message of the notification"
+        },
+        "read": {
+          "type": "boolean",
+          "description": "Whether the notification has been read"
+        },
+        "createdAt": {
+          "type": "timestamp",
+          "description": "The time the notification was created"
+        },
+        "type": {
+          "type": "string",
+          "enum": ["NEW_TICKET", "NEW_COMMENT"],
+          "description": "The type of notification"
+        },
+        "linkId": {
+          "type": "string",
+          "description": "An optional ID to link to (e.g., ticket ID)"
+        }
+      },
+      "required": ["userId", "title", "message", "read", "createdAt", "type"]
+    }
+  },
+  "firestore": {
+    "/notifications/{notificationId}": {
+      "schema": {
+        "$ref": "#/entities/Notification"
+      },
+      "description": "Notifications for users"
+    }
+  }
+}
