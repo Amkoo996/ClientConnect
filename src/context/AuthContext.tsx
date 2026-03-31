@@ -1,121 +1,64 @@
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { auth, db } from '../firebase';
-import { 
-  onAuthStateChanged, 
-  signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword, 
-  signOut 
-} from 'firebase/auth';
-import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { User, AuthContextType } from '../types';
+import { auth, db } from '../firebase';
+import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from 'firebase/auth';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const cached = localStorage.getItem('cachedUser');
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        return {
-          ...parsed,
-          createdAt: new Date(parsed.createdAt)
-        };
-      } catch (e) {
-        return null;
-      }
-    }
-    return null;
-  });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      try {
-        if (firebaseUser) {
-          const userDocRef = doc(db, 'users', firebaseUser.uid);
-          const userDoc = await getDoc(userDocRef);
-          
-          if (userDoc.exists()) {
-            const userData = userDoc.data() as Omit<User, 'createdAt'> & { createdAt: Timestamp };
-            const user: User = {
-              ...userData,
-              createdAt: userData.createdAt.toDate(),
-            };
-            setCurrentUser(user);
-            localStorage.setItem('cachedUser', JSON.stringify(user));
-          } else {
-            setCurrentUser(null);
-            localStorage.removeItem('cachedUser');
-          }
+      if (firebaseUser) {
+        // Fetch user role from Firestore or default to CLIENT
+        const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+        let userData: User;
+        
+        if (userDoc.exists()) {
+          userData = userDoc.data() as User;
         } else {
-          setCurrentUser(null);
-          localStorage.removeItem('cachedUser');
+          // Create new user document
+          const isAdmin = firebaseUser.email === 'reddemption19@gmail.com';
+          userData = {
+            uid: firebaseUser.uid,
+            email: firebaseUser.email || '',
+            role: isAdmin ? 'ADMIN' : 'CLIENT',
+            displayName: firebaseUser.displayName || 'User',
+            createdAt: new Date(),
+            isActive: true,
+          };
+          await setDoc(doc(db, 'users', firebaseUser.uid), userData);
         }
-      } catch (err) {
-        console.error("Error fetching user data:", err);
-        setError(err instanceof Error ? err.message : "Failed to load user data");
-      } finally {
-        setLoading(false);
+        setCurrentUser(userData);
+      } else {
+        setCurrentUser(null);
       }
+      setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  const login = async (email: string, password: string) => {
-    setError(null);
+  const login = async () => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Login failed";
-      setError(msg);
-      throw new Error(msg);
-    }
-  };
-
-  const registerWithEmail = async (email: string, password: string, displayName: string, companyName?: string) => {
-    setError(null);
-    try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      const newUser: User = {
-        uid: userCredential.user.uid,
-        email,
-        role: "CLIENT", // Defaulting to CLIENT, admin can be set manually in DB
-        displayName,
-        companyName,
-        createdAt: new Date(),
-        isActive: true,
-      };
-      
-      await setDoc(doc(db, 'users', userCredential.user.uid), {
-        ...newUser,
-        createdAt: Timestamp.fromDate(newUser.createdAt)
-      });
-      
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Registration failed";
-      setError(msg);
-      throw new Error(msg);
+      console.error("Login error:", err);
+      throw err;
     }
   };
 
   const logout = async () => {
-    setError(null);
-    try {
-      await signOut(auth);
-      setCurrentUser(null);
-      localStorage.removeItem('cachedUser');
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Logout failed";
-      setError(msg);
-      throw new Error(msg);
-    }
+    await signOut(auth);
   };
 
   return (
-    <AuthContext.Provider value={{ currentUser, loading, error, login, registerWithEmail, logout }}>
+    <AuthContext.Provider value={{ currentUser, loading, error, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
